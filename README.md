@@ -4,4 +4,4 @@ Find the actual sample on the below page:
 
 [http://geodevs.com/Basic](http://geodevs.com/Basic)
 
-![Page Snap](https://github.com/arun-doss/ArcGISBasicMap/blob/master/images/PageSnap.png)
+![Page Snap](https://raw.githubusercontent.com/arun-doss/ArcGISBasicMap/master/images/PageSnap.JPG)
