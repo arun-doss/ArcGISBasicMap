@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html dir="ltr">
+<!-- Created on 23/May/2018  for displaying and updating progress of strip in a Road network by Arun Prasad @GeoDevs -->
+<head>
+   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
+   <title>GeoDevs Basic</title>
+   <link rel="icon" href="images/geoLogo.png" type="image/png" /> <!-- Title Image of the Page // to be changed -->
+   <link rel="stylesheet" href="https://js.arcgis.com/3.24/esri/themes/calcite/dijit/calcite.css">
+   <link rel="stylesheet" href="https://js.arcgis.com/3.24/esri/themes/calcite/esri/esri.css">
+
+   <link rel="stylesheet" href="layout.css"><!-- Custom style sheet created on 23/May/2018 -->   
+   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+   <style>
+        html,
+        body,
+        #map {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #search {
+            display: block;
+            position: absolute;
+            z-index: 2;
+            top: 80px;
+            left: 30px;
+        }
+      .esriSimpleSliderTL {
+            top: 80px !important;
+            left: 30px !important;
+        }
+
+        .HomeButton .home {
+            display: block;
+            position: absolute;
+            z-index: 2;
+            top: 210px;
+            left: 30px;
+        }
+   </style>
+   <script src="https://js.arcgis.com/3.24/"></script>
+   <script>
+        var map;
+        var identifyStatus = false;
+        var navOptions = {"zoomIn":{"cursor":"zoom-in", "name":"zoomIn"},
+                            "zoomOut":{"cursor":"zoom-out", "name":"zoomOut"},
+                            "prevExt":{"cursor":"default", "name":"prevExt"}, 
+                            "nxtExt":{"cursor":"default", "name":"nxtExt"},
+                            "pan":{"cursor":"-webkit-grab", "name":"pan"},
+                            "deactivate":{"cursor":"default", "name":"deactivate"},
+                            "info":{"cursor":"help", "name":"deactivate"}
+                        };
+        
+        require([
+
+            "esri/map",
+            "esri/dijit/Search",
+            "esri/dijit/HomeButton",
+            "esri/toolbars/navigation",
+            "esri/dijit/BasemapGallery",
+            "esri/layers/ImageParameters",
+            "esri/layers/ArcGISDynamicMapServiceLayer",
+            "esri/tasks/IdentifyTask",
+            "esri/tasks/IdentifyParameters",
+            "esri/InfoTemplate",
+            "esri/dijit/Legend",
+            "esri/dijit/Measurement",
+            "esri/units",
+            "dojo/_base/array",
+            "dojo/domReady!"
+
+        ], function (Map, Search, HomeButton, Navigation,BasemapGallery, ImageParameters, ArcGISDynamicMapServiceLayer, IdentifyTask, IdentifyParameters, InfoTemplate,Legend, Measurement,Units, arrayUtils) {
+
+                map = new Map("map", {
+                basemap: "dark-gray",
+                // center: [-120.435, 46.159], // lon, lat
+                center:[-118.274232, 34.037714],
+                zoom: 10
+                });
+
+                var search = new Search({
+                    map: map
+                }, "search");
+                search.startup();
+
+                var homeButton = new HomeButton({
+                    theme: "HomeButton",
+                    map: map,
+                    extent: null,
+                    visible: true
+                }, "home");
+                homeButton.startup();
+
+                /* Basemap gallery widget created on 24/May/2018 */
+                var basemapGallery = new BasemapGallery({
+                    showArcGISBasemaps: true,
+                    map: map,
+                    defaultAreaUnit: Units.SQUARE_MILES,
+                    defaultLengthUnit: Units.KILOMETERS
+                }, "basemapGallery");
+                basemapGallery.startup();
+
+                var measureWidget = new Measurement({
+                    map:map
+                },"measureWidget");
+                measureWidget.startup();
+                
+                var progressList = {none:"none", basemap:"toogleBasemap", legend:"legendList", measure:"measureTool"};
+                var containerIds = {basemap:"#toogleBasemapColumn", legend:"#legendColumn", measure:"#measureColumn"};
+                var currentProgress = progressList.none;
+
+                /* Legend Content -- **START** */
+                
+                map.on("load", function (evt) {
+                    map.setZoom(map.getZoom()+1);
+                    // var legendLayers = [];
+                    // legendLayers.push({
+                    //     layer:mapService,
+                    //     title:" ",
+                    //     // hideLayers:[config.others.legend.duplicateActivityLayerId]
+                    // });
+                    
+
+                    // var legendDijit = new Legend({
+                    //     map: map,
+                    //     layerInfos:legendLayers
+                    // }, "legendContent");
+                    // legendDijit.startup();
+                    
+                });
+                /* Legend Content -- **END** */
+                
+                /* Navigation Toolbar Code - **START** */
+                // Create navigation tools
+                navToolbar = new Navigation(map);
+                $(document).ready(function(){
+                    $("#zoomIn").click(function(){
+                        navToolbar.activate(Navigation.ZOOM_IN);
+                        changeOptions(navOptions.zoomIn); // To change the cursor as per user interaction
+                    });
+
+                    $("#zoomOut").click(function(){
+                        navToolbar.activate(Navigation.ZOOM_OUT);
+                        changeOptions(navOptions.zoomOut);
+                    });
+
+                    $("#prevExt").click(function(){
+                        navToolbar.zoomToPrevExtent();
+                        changeOptions(navOptions.prevExt);
+                    });
+
+                    $("#nxtExt").click(function(){
+                        navToolbar.zoomToNextExtent();
+                        changeOptions(navOptions.nxtExt);                        
+                    });
+
+                    $("#pan").click(function(){
+                        navToolbar.activate(Navigation.PAN);
+                        changeOptions(navOptions.pan);
+                    });
+                    $("#deactivate").click(function(){
+                        navToolbar.deactivate();
+                        changeOptions(navOptions.deactivate);                        
+                    });
+                    $("#info").click(function(){
+                        navToolbar.deactivate();
+                        changeOptions(navOptions.info);                        
+                    });
+
+                });
+
+                function changeOptions(navOption) {
+                    if(navOption == navOptions.zoomIn) {
+                        map.setMapCursor(navOptions.zoomIn.cursor);
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "#a5a1a1");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.zoomOut) {
+                        map.setMapCursor(navOptions.zoomOut.cursor);
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "#a5a1a1");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.prevExt) {
+                        map.setMapCursor(navOptions.prevExt.cursor);
+                        navToolbar.deactivate();
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.nxtExt) {
+                        map.setMapCursor(navOptions.nxtExt.cursor);
+                        navToolbar.deactivate();
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.pan) {
+                        map.setMapCursor(navOptions.pan.cursor);
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "#a5a1a1");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.deactivate) {
+                        map.setMapCursor(navOptions.deactivate.cursor);
+                        identifyStatus = false;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "white");
+                    } else if(navOption == navOptions.info) {
+                        map.setMapCursor(navOptions.info.cursor);
+                        identifyStatus = true;
+                        $("#zoomIn").css("background", "white");
+                        $("#zoomOut").css("background", "white");
+                        $("#prevExt").css("background", "white");
+                        $("#nxtExt").css("background", "white");
+                        $("#pan").css("background", "white");
+                        $("#info").css("background", "#a5a1a1");
+                    }
+                }
+                
+                /* Identify option created on 29/May/2018 */
+                map.on("click", function(evt) {
+                            if(identifyStatus == true) {
+                            executeIdentifyTask(evt);
+                            }
+                });
+                function identifyOption(){
+                    if(identifyStatus == false) {
+                        identifyStatus = true;
+                        identifyButton.style.borderStyle = 'inset';
+                        identifyListener = map.on("click", function(evt) {
+                            if(identifyStatus == true) {
+                            executeIdentifyTask(evt);
+                            }
+                        });        
+                    }
+                    else if(identifyStatus == true) {
+                        identifyStatus = false;
+                        identifyButton.style.borderStyle = '';
+                    }
+                }
+
+                function executeIdentifyTask(event) {
+                    var visible = [];
+                    var identifyTask, identifyParams;
+                    identifyTask = new IdentifyTask(config.mapService.layerUrl);
+                    identifyParams = new IdentifyParameters();
+                    identifyParams.tolerance = 1;
+                    identifyParams.returnGeometry = true;
+                    identifyParams.layerIds = visible;
+                    identifyParams.layerOption = IdentifyParameters.LAYER_OPTION_TOP;
+                    identifyParams.width = map.width;
+                    identifyParams.height = map.height;
+                    identifyParams.geometry = event.mapPoint;
+                    identifyParams.mapExtent = map.extent;
+
+                    var deferred = identifyTask.execute(identifyParams).addCallback(function (response) {
+                        // var response = $.grep(response, function(e){  /* for removing the duplicate layer added for symbology from identify task */
+                        //     return e.layerId != config.dublicateLayerId;  /* duplicate layerId  defined in config.json*/
+                        // });
+                        return arrayUtils.map(response, function (result) {
+                            var feature = result.feature;
+                            var layerName = result.layerName;
+                            feature.attributes.layerName = layerName;
+
+                            var infoTemplate = new InfoTemplate(layerName, "${*}");
+                            infoTemplate.setContent(get_content);            
+                            feature.setInfoTemplate(infoTemplate);
+                            return feature;
+                        });
+                    });
+                    map.infoWindow.setFeatures([deferred]);
+                    map.infoWindow.show(event.mapPoint);
+                }  
+
+                
+
+                function get_content(graphic) {
+                    var attrib = graphic.attributes;
+                    return CreateTableFromJSON(attrib);
+                }
+
+                function CreateTableFromJSON(myResults) {
+                    var skip_flds = ["OBJECTID", "Shape", "layerName", "Shape.STLength()","SHAPE.STLength()","SHAPE"];
+                    // var ord_flds = ["GIS ID", "Project Code", "WBS", "Building ID", "Sub Segment", "Pile No", "Activity", "Completed", "Completion Date", "Easting (Local)", "Northing (Local)", "Remarks"];
+                    var all_flds = Object.keys(myResults);
+                    ord_flds = all_flds.filter( function( el ) {
+                        if(skip_flds.indexOf(el) == -1){
+                            return el;
+                        }
+                        // return !skip_flds.includes( el );
+                    } );
+                    // CREATE DYNAMIC TABLE.
+                    var table = document.createElement("table");
+                //   table.style.borderStyle = "dotted";
+                    table.innerHTML = "";
+                    // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+                    var tr = table.insertRow(-1); // TABLE ROW.
+                    // ADD JSON DATA TO THE TABLE AS ROWS.
+                    var row_bunch = [];
+                    for (var el in ord_flds)
+                    {
+                        var key = ord_flds[el];
+                        // if (skip_flds.indexOf(key) >= 0) {
+                        //     //Skips the flds
+                        // }
+                        // else {
+                            var tr = table.insertRow(-1);
+                //  tr.style.borderStyle = "dotted";
+                            var tabCell = tr.insertCell(-1);
+                        
+                            tabCell.innerHTML = key;//myResults[i][col[j]];
+                            var tabCell2 = tr.insertCell(-1);
+                            tabCell.style.borderWidth = "1px";
+                            tabCell2.style.borderWidth = "1px";
+                            if (el == (ord_flds.length - 1))
+                            {
+                                //tabCell.style.borderStyle = "dotted none dotted dotted";
+                                //tabCell2.style.borderStyle = "dotted dotted dotted dotted";
+                            
+                                tabCell.style.borderStyle = "solid none solid solid";
+                                tabCell2.style.borderStyle = "solid solid solid solid";
+                            }
+                            else
+                            {
+                                ////tabCell.style.borderStyle = "dotted none none dotted";
+                                ////tabCell2.style.borderStyle = "dotted dotted none dotted";
+
+                                tabCell.style.borderStyle = "solid none none solid";
+                                tabCell2.style.borderStyle = "solid solid none solid";
+                            }
+                            tabCell2.innerHTML = myResults[key];//myResults[i][col[j]];
+                            if (key == "Completion Date")
+                            {
+                                if (myResults[key] != "Null") {
+                                    var completeDate = locale.format(new Date(myResults[key]), {
+                                        selector: 'date',
+                                        datePattern: 'dd/MMM/yyyy'
+                                    });
+                                    tabCell2.innerHTML = completeDate;
+                                }
+                            }
+
+                        // }
+                    }
+                    return table;//.innerHTML;
+                }
+                
+                /* Navigation Toolbar Code - **END** */
+
+                /*Progress Toolbar Code -- **START** created on 24/May/2018*/
+                $(".progressButton").click(function(){ // change the progress Button on click
+                    showProgressForm(this.id); 
+                });
+
+                $(".closeImage").click(function(){ // close a progress button
+                    var closedContainerID = returnContainerId(currentProgress);  
+                    currentProgress = progressList.none; 
+                    $(closedContainerID).css("display", "none");
+                });
+
+                function showProgressForm(pressedButton){ // show the current form clicked
+                    var selectedContainerID = returnContainerId(pressedButton);                    
+                    if (pressedButton == progressList.none) {
+                        // show selected progress
+                        currentProgress = pressedButton;
+                        $(selectedContainerID).css("display", "flex");
+                        
+                    } else if (pressedButton == currentProgress) {
+                        // show selected progress
+                        currentProgress = progressList.none;                                                
+                        $(selectedContainerID).css("display", "none");
+                        
+                    }  else {
+                        // close cureent progress and show current progress
+                        var currentContainerID = returnContainerId(currentProgress);
+                        currentProgress = pressedButton;                        
+                        $(currentContainerID).css("display", "none");
+                        $(selectedContainerID).css("display", "flex");
+                        /* refreshing the progress table once clicked */
+                        if(currentProgress == progressList.table) {
+                            if(currentTableTab == tableList.overview) {
+                                updateOverviewTab(); /* updating the overview tab when the progress table button is pressed */
+                            } else if(currentTableTab == tableList.summary) {
+                                // update the summarty tab
+                            }
+                        }
+                    }
+                }
+
+                function returnContainerId(pressedButton) { // return the form id for the selected progress
+                    if(pressedButton == progressList.basemap) {
+                        return containerIds.basemap;
+                    } else if(pressedButton == progressList.legend) {
+                        return containerIds.legend;
+                    } else if(pressedButton == progressList.measure) {
+                        return containerIds.measure;
+                    }
+                }
+                /*Progress Toolbar Code -- **END**/
+
+
+        });
+
+   </script>
+</head>
+
+<body class="calcite" >
+    <div class="siteHeader">
+        <div class="logoLeft">
+            <img src="images/Logo.png" width="40" alt = "">
+        </div>
+        <div class="siteHeading">
+            Navigation Model
+        </div>
+        <div class="logoRight">
+            <img src="images/geoLogo.png" width="40" alt = "">
+        </div>
+    </div>
+    <div id="search"></div>
+    <div id="home"></div>
+    <div id="toolBar">
+        <div id="zoomIn" title="Zoom In">
+            <img src="images/zoomIn.png" style="width: 20px;" alt = "">
+        </div>
+        <div id="zoomOut" title="Zoom Out">
+            <img src="images/zoomOut.png" style="width: 20px;" alt = "">     
+        </div>
+        <div id="prevExt" title="Previous Extent">
+            <img src="images/prev.png" style="width: 20px;" alt = "">            
+        </div>
+        <div id="nxtExt" title="Next Extent">
+            <img src="images/next.png" style="width: 20px;" alt = "">            
+        </div>
+        <div id="pan" title="Pan">
+            <img src="images/pan.png" style="width: 20px;" alt = "">            
+        </div>
+        <div id="deactivate" title="Deactivate">
+            <img src="images/deactivate.png" style="width: 20px;" alt = "">            
+        </div>
+        <div id="info" title="Identify">
+                <img src="images/info.png" style="width: 20px;" alt = "">            
+        </div>
+    </div>
+
+    <div id="progressBar">
+            <div id="toogleBasemap" class = "progressButton" title="Basemap">
+                <img src="images/basemap.png" style="width: 30px;" alt = ""> 
+            </div>
+            <div id="measureTool" class = "progressButton" title="Legend">
+                <img src="images/measure.png" style="width: 30px;" alt = ""> 
+            </div>
+            <!-- <div id="legendList" class = "progressButton" title="Legend">
+                <img src="images/summary.png" style="width: 30px;" alt = ""> 
+            </div> -->
+    </div>
+
+    <div id="toogleBasemapColumn" class="progressColumn">
+        <div class = "progressHeader"><a class="progressHeading">Change Basemap</a><img title = "Close" src="images/close.png" class="closeImage" alt = ""></div>
+        <div class = "progressContent" id="basemapContent"> <!-- basemapContent css defined seperatly to limit large size ocuurence -->
+            <div id="basemapGallery"></div>
+        </div>
+    </div>
+
+    <div id="measureColumn" class="progressColumn">
+        <div class = "progressHeader" ><a class="progressHeading">Measurement</a><img title = "Close" src="images/close.png" class="closeImage" alt = ""></div>
+        <div class = "progressContent" id="measureContent">
+                <div id="measureWidget"></div>
+        </div>
+    </div>
+
+    <div id="legendColumn" class="progressColumn">
+        <div class = "progressHeader" ><a class="progressHeading">Legends</a><img title = "Close" src="images/close.png" class="closeImage" alt = ""></div>
+        <div class = "progressContent" id="legendContent">
+        </div>
+    </div>
+          
+          
+    <div id="map" class="map"></div>
+    <div class="siteFooter">© Basic Map - <span><a>Geo Devs</a></span> - 2019</div>
+    <div data-dojo-type="dijit/layout/ContentPane" id="EditorToolDiv" style="width:30%;display: none;" data-dojo-props="region:'left', splitter:true"></div>
+    
+</body>
+
+</html>
